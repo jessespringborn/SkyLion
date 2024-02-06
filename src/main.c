@@ -1,25 +1,19 @@
 #include <stdio.h>
+#include <stdbool.h>
 
-#include <vulkan/vulkan.h>
-
-#include <vk_mem_alloc.h>
-
-#include <SDL.h>
-
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include <cimgui.h>
+#include "sl_window.h"
 
 int
 main()
 {
+
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
     {
         printf("SDL_Init Error: %s\n", SDL_GetError());
         return 1;
     }
 
-    SDL_Window* window = SDL_CreateWindow("Vulkan", 800, 600,
-                                          SDL_WINDOW_VULKAN);
+    sl_window *window = sl_window_create("Hello, World!", 640, 480);
     if (window == NULL)
     {
         printf("SDL_CreateWindow Error: %s\n", SDL_GetError());
@@ -43,3 +37,14 @@ main()
     printf("Hello, World!\n");
     return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
