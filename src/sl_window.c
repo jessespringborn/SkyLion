@@ -2,14 +2,32 @@
 // Created by jesse on 2/5/24.
 //
 
-#include "../include/sl_window.h"
+#include "skylion.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 
-sl_window* sl_window_create(const char* title, int width, int height)
+SDL_Window* SLWindow;
+
+void CreateWindow(const char* title, int width, int height)
 {
-    sl_window* window = malloc(sizeof(sl_window));
-    window->window = SDL_CreateWindow(title, width, height,
+    printf("Creating window...\n");
+
+    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+    {
+        printf("SDL_Init Error: %s\n", SDL_GetError());
+        exit(1);
+    }
+
+    SLWindow = SDL_CreateWindow(title, width, height,
                                       SDL_WINDOW_VULKAN);
-    return window;
+
+    if (!SLWindow)
+    {
+        printf("SDL_CreateWindow Error: %s\n", SDL_GetError());
+        SDL_Quit();
+        exit(1);
+    }
+
+    printf("Window created.\n");
 }
