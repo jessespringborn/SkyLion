@@ -2,7 +2,7 @@
 // Created by jesse on 2/6/24.
 //
 
-#include "skylion.h"
+#include "SkyLion.h"
 
 #include <vulkan/vulkan.h>
 
@@ -263,4 +263,16 @@ createRenderer()
     createDebugMessenger();
 
     createMemoryAllocator();
+}
+
+void
+destroyRenderer()
+{
+    if (g_enableValidationLayers)
+    {
+        DestroyDebugUtilsMessengerEXT(g_vulkanInstance,
+                                      g_vulkanDebugMessenger,
+                                      NULL);
+    }
+    vkDestroyInstance(g_vulkanInstance, NULL);
 }

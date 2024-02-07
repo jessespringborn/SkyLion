@@ -11,12 +11,12 @@ add_subdirectory(third_party/sdl EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/cimgui EXCLUDE_FROM_ALL)
 
 add_executable(SkyLion
-        src/sl_window.c
-        src/sl_window.h
-        src/skylion.c
-        src/skylion.h
-        src/sl_renderer.c
-        src/sl_renderer.h
+        src/Window.c
+        src/Window.h
+        src/SkyLion.c
+        src/SkyLion.h
+        src/Renderer.c
+        src/Renderer.h
 )
 
 target_link_libraries(SkyLion PRIVATE SDL3::SDL3)

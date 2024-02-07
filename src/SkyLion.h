@@ -17,7 +17,7 @@
 #define SKYLION_SRC_SKYLION_H
 
 /** The Window */
-#include "sl_window.h"
-#include "sl_renderer.h"
+#include "Window.h"
+#include "Renderer.h"
 
 #endif //SKYLION_SRC_SKYLION_H

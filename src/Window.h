@@ -10,6 +10,8 @@
 extern SDL_Window* SLWindow;
 
 
-void CreateWindow(const char* title, int width, int height);
+void createWindow(const char* title, int width, int height);
+
+void destroyWindow();
 
 #endif //SKYLION__SL_WINDOW_H

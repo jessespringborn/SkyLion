@@ -2,14 +2,14 @@
 // Created by jesse on 2/6/24.
 //
 
-#include "skylion.h"
+#include "SkyLion.h"
 
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "sl_window.h"
+#include "Window.h"
 
-void CoreLoop()
+void coreLoop()
 {
     bool running = true;
     while (running)
@@ -27,31 +27,35 @@ void CoreLoop()
 }
 
 void
-ShutDown()
+shutDown()
 {
     printf("Shutting down Sky Lion Engine...\n");
 
-    SDL_DestroyWindow(SLWindow);
-    SDL_Quit();
+    destroyRenderer();
+    destroyWindow();
 
     printf("Sky Lion Engine shut down.\n");
 }
 
 int
-Start()
+run()
 {
     printf("Starting Sky Lion Engine...\n");
 
-    CreateWindow("Sky Lion", 800, 600);
+    createWindow("Sky Lion", 800, 600);
     createRenderer();
-    CoreLoop();
+
+    coreLoop();
+
+    shutDown();
+
     return 0;
 }
 
 int
 main()
 {
-    Start();
-    ShutDown();
+    run();
+
     return 0;
 }

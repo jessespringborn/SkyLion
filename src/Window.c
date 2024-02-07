@@ -2,14 +2,15 @@
 // Created by jesse on 2/5/24.
 //
 
-#include "skylion.h"
+#include "SkyLion.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 
 SDL_Window* SLWindow;
 
-void CreateWindow(const char* title, int width, int height)
+void
+createWindow(const char* title, int width, int height)
 {
     printf("Creating window...\n");
 
@@ -30,4 +31,13 @@ void CreateWindow(const char* title, int width, int height)
     }
 
     printf("Window created.\n");
+}
+
+void
+destroyWindow()
+{
+    printf("Destroying window...\n");
+    SDL_DestroyWindow(SLWindow);
+    printf("Window destroyed.\n");
+    SDL_Quit();
 }
