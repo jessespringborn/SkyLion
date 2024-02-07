@@ -55,7 +55,8 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     return VK_FALSE;
 }
 
-void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo, PFN_vkDebugUtilsMessengerCallbackEXT debugCallbackFunc)
+void
+populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo, PFN_vkDebugUtilsMessengerCallbackEXT debugCallbackFunc)
 {
     createInfo->sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo->messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
@@ -173,23 +174,6 @@ checkValidationLayerSupport()
 
     free(availableLayers);
     return true;
-}
-
-void
-printAvailableExtensions()
-{
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
-
-    VkExtensionProperties* extensions = malloc(sizeof(VkExtensionProperties) * extensionCount);
-    vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions);
-
-    printf("Available Vulkan extensions:\n");
-    for (uint32_t i = 0; i < extensionCount; i++)
-    {
-        printf("\t%s\n", extensions[i].extensionName);
-    }
-    free(extensions);
 }
 
 void
