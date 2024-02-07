@@ -55,6 +55,19 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     return VK_FALSE;
 }
 
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo, PFN_vkDebugUtilsMessengerCallbackEXT debugCallbackFunc)
+{
+    createInfo->sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo->messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+                                | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                                | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo->messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+                                | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                                | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo->pfnUserCallback = debugCallbackFunc;
+    createInfo->pUserData       = NULL;
+}
+
 
 VkResult
 CreateDebugUtilsMessengerEXT(VkInstance instance,
@@ -79,7 +92,7 @@ DestroyDebugUtilsMessengerEXT(VkInstance instance,
                                    const VkAllocationCallbacks* pAllocator)
 {
     PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+        vkGetInstanceProcAddr(instance,"vkDestroyDebugUtilsMessengerEXT");
     if (func != NULL)
     {
         func(instance, debugMessenger, pAllocator);
@@ -87,30 +100,17 @@ DestroyDebugUtilsMessengerEXT(VkInstance instance,
 }
 
 void
-createDebugMessenger()
+createDebugMessenger(VkInstance* instance, VkDebugUtilsMessengerEXT* debugMessenger)
 {
-    if (!g_enableValidationLayers)
-    {
-        return;
-    }
 
     VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
-    createInfo.sType            = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity  = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType      = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    createInfo.pfnUserCallback  = debugCallback;
-    createInfo.pUserData        = NULL;
+    populateDebugMessengerCreateInfo(&createInfo, debugCallback);
 
 
-
-    if (CreateDebugUtilsMessengerEXT(g_vulkanInstance,
+    if (CreateDebugUtilsMessengerEXT(*instance,
                                      &createInfo,
                                      NULL,
-                                     &g_vulkanDebugMessenger)
+                                     debugMessenger)
                                      != VK_SUCCESS)
     {
         printf("Failed to set up debug messenger!\n");
@@ -122,11 +122,11 @@ createDebugMessenger()
 }
 
 const char**
-getRequiredExtensions(Uint32 *extensionCount)
+getRequiredExtensions(Uint32 *extensionCount, bool enableValidationLayers)
 {
     char const* const* extensionNames = SDL_Vulkan_GetInstanceExtensions(
         extensionCount);
-    if (g_enableValidationLayers)
+    if (enableValidationLayers)
     {
         Uint32 count = *extensionCount;
         *extensionCount += 1;
@@ -193,9 +193,9 @@ printAvailableExtensions()
 }
 
 void
-createInstance()
+createInstance(VkInstance* instance, bool enableValidationLayers, const char** validationLayers, PFN_vkDebugUtilsMessengerCallbackEXT debugCallbackFunc)
 {
-    if (g_enableValidationLayers && !checkValidationLayerSupport())
+    if (enableValidationLayers && !checkValidationLayerSupport())
     {
         printf("Validation layers requested, but not available!\n");
         exit(1);
@@ -210,31 +210,30 @@ createInstance()
     appInfo.apiVersion          = VK_API_VERSION_1_3;
 
     Uint32 extensionCount = 0;
-    const char** extensionNames = getRequiredExtensions(&extensionCount);
-    printf("Found extensions extensions:\n");
-    for (uint32_t i = 0; i < extensionCount; i++)
-    {
-        printf("\t%s\n", extensionNames[i]);
-    }
+    const char** extensionNames = getRequiredExtensions(&extensionCount, enableValidationLayers);
 
     VkInstanceCreateInfo createInfo = {};
     createInfo.sType                    = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo         = &appInfo;
     createInfo.enabledExtensionCount    = extensionCount;
     createInfo.ppEnabledExtensionNames  = extensionNames;
-    if (g_enableValidationLayers)
+
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
+    if (enableValidationLayers)
     {
-        createInfo.enabledLayerCount =
-            sizeof(g_validationLayers) / sizeof(g_validationLayers[0]);
-        createInfo.ppEnabledLayerNames = g_validationLayers;
+        createInfo.enabledLayerCount = sizeof(g_validationLayers) / sizeof(g_validationLayers[0]);
+        createInfo.ppEnabledLayerNames = validationLayers;
+
+        populateDebugMessengerCreateInfo(&debugCreateInfo, debugCallbackFunc);
+        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
     }
     else
     {
         createInfo.enabledLayerCount = 0;
+        createInfo.pNext = NULL;
     }
 
-    VkResult result = vkCreateInstance(&createInfo, NULL,
-                                       &g_vulkanInstance);
+    VkResult result = vkCreateInstance(&createInfo, NULL,instance);
     if (result != VK_SUCCESS)
     {
         printf("Failed to create Vulkan instance!\n");
@@ -245,26 +244,36 @@ createInstance()
         printf("Vulkan instance created successfully!\n");
     }
 
-    if (g_enableValidationLayers)
+    if (enableValidationLayers)
     {
         free(extensionNames);
     }
 
 }
 
+/************************************************************
+ *
+ *  Create the renderer
+ *
+ ************************************************************/
 void
 createRenderer()
 {
+    createInstance(&g_vulkanInstance,g_enableValidationLayers,g_validationLayers, debugCallback);
     if (g_enableValidationLayers)
     {
         printf("Creating Vulkan instance with validation layers...\n");
+        createDebugMessenger(&g_vulkanInstance,&g_vulkanDebugMessenger);
     }
-    createInstance();
-    createDebugMessenger();
 
     createMemoryAllocator();
 }
 
+/************************************************************
+ *
+ *  Clean up
+ *
+ ************************************************************/
 void
 destroyRenderer()
 {
