@@ -4,256 +4,157 @@
 
 #include "SkyLion.h"
 
-#include <vulkan/vulkan.h>
 
-#include <vk_mem_alloc.h>
+VulkanContext g_vulkanContext;
 
-#include <SDL3/SDL_vulkan.h>
+// Function to check if all required extensions are supported by the device
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
-
-const char* g_validationLayers[] = {
-    "VK_LAYER_KHRONOS_validation"
-};
-
-int g_vmaExtensions[] = {
-    VK_KHR_dedicated_allocation,
-    VK_KHR_bind_memory2,
-    VK_KHR_maintenance4,
-    VK_EXT_memory_budget,
-    VK_EXT_memory_priority,
-    VK_AMD_device_coherent_memory
-};
-
-const char* g_deviceExtensions[] = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
-
-typedef struct QueueFamilyIndices
+bool
+checkSwapChainSupport(VkPhysicalDevice device)
 {
-    bool graphicsFamilyHasValue;
-    Uint32 graphicsFamily;
-    bool presentFamilyHasValue;
-    Uint32 presentFamily;
-} QueueFamilyIndices;
+    uint32_t extensionCount = 0;
+    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, NULL);
 
-typedef struct SwapChainSupportDetails
-{
-    VkSurfaceCapabilitiesKHR capabilities;
-    Uint32 formatCount;
-    VkSurfaceFormatKHR* formats;
-    Uint32 presentModeCount;
-    VkPresentModeKHR* presentModes;
-} SwapChainSupportDetails;
+    VkExtensionProperties availableExtensions[extensionCount];
+    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, availableExtensions);
 
-#ifndef NDEBUG
-const bool g_enableValidationLayers = true;
-#else
-const bool g_enableValidationLayers = false;
-#endif
-
-VkInstance                  g_vulkanInstance;
-VkDebugUtilsMessengerEXT    g_vulkanDebugMessenger;
-VkSurfaceKHR                g_vulkanSurface;
-VkPhysicalDevice            g_vulkanPhysicalDevice;
-VkDevice                    g_vulkanDevice;
-VkQueue                     g_graphicsQueue;
-VkQueue                     g_presentQueue;
-
-VmaAllocator                g_vulkanMemoryAllocator;
-
-void
-createMemoryAllocator()
-{
-    
-}
-
-SwapChainSupportDetails
-querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR* surface)
-{
-    SwapChainSupportDetails details;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, *surface, &details.capabilities);
-
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, *surface, &details.formatCount, NULL);
-    if (details.formatCount != 0)
+    for (uint32_t i = 0; i < extensionCount; i++)
     {
-        details.formats = malloc(sizeof(VkSurfaceFormatKHR) * details.formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, *surface, &details.formatCount, details.formats);
+        if (strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME, availableExtensions[i].extensionName) == 0)
+        {
+            return true; // Swap chain extension is supported
+        }
     }
 
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, *surface, &details.presentModeCount, NULL);
-    if (details.presentModeCount != 0)
-    {
-        details.presentModes = malloc(sizeof(VkPresentModeKHR) * details.presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, *surface, &details.presentModeCount, details.presentModes);
-    }
-
-    return details;
+    return false; // Swap chain extension is not supported
 }
-
 QueueFamilyIndices
-findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR* surface)
+findQueueFamilies(VulkanContext *context, VkPhysicalDevice device)
 {
-    struct QueueFamilyIndices indices = {
-        .graphicsFamilyHasValue = false,
-        .graphicsFamily = 0,
-        .presentFamilyHasValue = false,
-        .presentFamily = 0
-    };
+    QueueFamilyIndices indices = {0, 0, false, false};
 
-    Uint32 queueFamilyCount = 0;
+    uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
-    VkQueueFamilyProperties* queueFamilies = malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
+
+    VkQueueFamilyProperties queueFamilies[queueFamilyCount];
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies);
 
-    for (Uint32 i = 0; i < queueFamilyCount; i++)
+    for (uint32_t i = 0; i < queueFamilyCount; i++)
     {
+        // Check for graphics support
         if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
         {
-            indices.graphicsFamilyHasValue = true;
             indices.graphicsFamily = i;
+            indices.graphicsFamilyFound = true;
         }
 
+        // Check for presentation support
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, *surface, &presentSupport);
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, context->surface, &presentSupport);
         if (presentSupport)
         {
-            indices.presentFamilyHasValue = true;
             indices.presentFamily = i;
+            indices.presentFamilyFound = true;
         }
 
-        if (indices.graphicsFamilyHasValue && indices.presentFamilyHasValue)
+        // Break out early if both families are found
+        if (indices.graphicsFamilyFound && indices.presentFamilyFound)
         {
             break;
         }
     }
 
-    free(queueFamilies);
     return indices;
 }
 
 void
-createLogicalDevice()
+createVulkanDevice(VulkanContext *context)
 {
-    QueueFamilyIndices indices = findQueueFamilies(g_vulkanPhysicalDevice, &g_vulkanSurface);
+    QueueFamilyIndices indices = findQueueFamilies(context, context->physicalDevice);
 
-    // TODO: Allow for different queue families
+    VkDeviceQueueCreateInfo queueCreateInfo = {};
+    queueCreateInfo.sType               = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex    = indices.graphicsFamily;
+    queueCreateInfo.queueCount          = 1;
 
     float queuePriority = 1.0f;
-    VkDeviceQueueCreateInfo queueCreateInfo = {};
-    queueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
-    queueCreateInfo.queueCount       = 1;
     queueCreateInfo.pQueuePriorities = &queuePriority;
 
     VkPhysicalDeviceFeatures deviceFeatures = {};
 
-    VkDeviceCreateInfo createInfo = {};
+    VkDeviceCreateInfo createInfo       = {};
     createInfo.sType                    = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.queueCreateInfoCount     = 1;
     createInfo.pQueueCreateInfos        = &queueCreateInfo;
+    createInfo.queueCreateInfoCount     = 1;
     createInfo.pEnabledFeatures         = &deviceFeatures;
-    createInfo.enabledExtensionCount    = sizeof(g_deviceExtensions) / sizeof(g_deviceExtensions[0]);
-    createInfo.ppEnabledExtensionNames  = g_deviceExtensions;
+    createInfo.enabledExtensionCount    = 0;
 
-    if (g_enableValidationLayers)
+    if (context->enableValidationLayers)
     {
-        createInfo.enabledLayerCount = sizeof(g_validationLayers) / sizeof(g_validationLayers[0]);
-        createInfo.ppEnabledLayerNames = g_validationLayers;
+        createInfo.enabledLayerCount = context->validationLayerCount;
+        createInfo.ppEnabledLayerNames = &context->validationLayers;
     }
     else
     {
         createInfo.enabledLayerCount = 0;
     }
 
-    if (vkCreateDevice(g_vulkanPhysicalDevice, &createInfo, NULL, &g_vulkanDevice) != VK_SUCCESS)
+    if (vkCreateDevice(context->physicalDevice, &createInfo, NULL, &context->device) != VK_SUCCESS)
     {
         printf("Failed to create logical device!\n");
         exit(1);
     }
-    else
-    {
-        printf("Logical device created successfully!\n");
-    }
 
-    vkGetDeviceQueue(g_vulkanDevice, indices.graphicsFamily, 0, &g_graphicsQueue);
-    vkGetDeviceQueue(g_vulkanDevice, indices.presentFamily, 0, &g_presentQueue);
+    vkGetDeviceQueue(context->device, indices.graphicsFamily, 0, &context->graphicsQueue);
+
+    printf("Logical device created.\n");
 }
 
+// Function to check if a physical device is suitable for the application's needs
 bool
-checkDeviceExtensionSupport(VkPhysicalDevice device)
+isDeviceSuitable(VulkanContext *context, VkPhysicalDevice device)
 {
-    Uint32 extensionCount;
-    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, NULL);
-    VkExtensionProperties* availableExtensions = malloc(sizeof(VkExtensionProperties) * extensionCount);
-    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, availableExtensions);
-
-    for (Uint32 i = 0; i < sizeof(g_deviceExtensions) / sizeof(g_deviceExtensions[0]); i++)
-    {
-        bool extensionFound = false;
-        for (Uint32 j = 0; j < extensionCount; j++)
-        {
-            if (strcmp(g_deviceExtensions[i], availableExtensions[j].extensionName) == 0)
-            {
-                extensionFound = true;
-                break;
-            }
-        }
-        if (!extensionFound)
-        {
-            free(availableExtensions);
-            return false;
-        }
-    }
-
-    free(availableExtensions);
-    return true;
-}
-
-bool
-isDeviceSuitable(VkPhysicalDevice device)
-{
-    QueueFamilyIndices indices = findQueueFamilies(device, &g_vulkanSurface);
-    return indices.graphicsFamilyHasValue && indices.presentFamilyHasValue && checkDeviceExtensionSupport(device);
+    QueueFamilyIndices indices = findQueueFamilies(context, device);
+    return indices.graphicsFamilyFound && indices.presentFamilyFound && checkSwapChainSupport(device);
 }
 
 void
-selectPhysicalDevice()
+createPhysicalDevice(VulkanContext* context)
 {
-    Uint32 deviceCount = 0;
-    vkEnumeratePhysicalDevices(g_vulkanInstance, &deviceCount, NULL);
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(context->instance, &deviceCount, NULL);
     if (deviceCount == 0)
     {
-        printf("Failed to find GPUs with Vulkan support!\n");
-        exit(1);
+        printf("Failed to find GPUs with Vulkan support.\n");
+        return;
     }
-    VkPhysicalDevice* devices = malloc(sizeof(VkPhysicalDevice) * deviceCount);
-    vkEnumeratePhysicalDevices(g_vulkanInstance, &deviceCount, devices);
 
-    for (Uint32 i = 0; i < deviceCount; i++)
+    VkPhysicalDevice devices[deviceCount];
+    vkEnumeratePhysicalDevices(context->instance, &deviceCount, devices);
+
+    for (uint32_t i = 0; i < deviceCount; i++)
     {
-        if (isDeviceSuitable(devices[i]))
+        if (isDeviceSuitable(context, devices[i]))
         {
-            g_vulkanPhysicalDevice = devices[i];
+            context->physicalDevice = devices[i];
             break;
         }
     }
 
-    if (g_vulkanPhysicalDevice == VK_NULL_HANDLE)
+    if (context->physicalDevice == VK_NULL_HANDLE)
     {
-        printf("Failed to find a suitable GPU!\n");
-        exit(1);
+        printf("Failed to find a suitable GPU.\n");
     }
-
-    free(devices);
+    else
+    {
+        printf("Physical device selected.\n");
+    }
 }
 
 void
-createSurface()
+createSurface(VulkanContext *context)
 {
-    if (!SDL_Vulkan_CreateSurface(SLWindow, g_vulkanInstance, NULL, &g_vulkanSurface))
+    if (!SDL_Vulkan_CreateSurface(SLWindow, context->instance, NULL, &context->surface))
     {
         printf("Failed to create window surface!\n");
         exit(1);
@@ -264,32 +165,63 @@ createSurface()
     }
 }
 
-VkBool32
-debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+const char**
+getVulkanExtensions(VulkanContext *context, Uint32 *extensionCount)
 {
-    printf("Validation layer: %s\n", pCallbackData->pMessage);
-    return VK_FALSE;
+    // Get the count and list of required SDL extensions
+    Uint32 sdlExtensionCount = 0;
+    char const* const* sdlExtensions = SDL_Vulkan_GetInstanceExtensions(&sdlExtensionCount);
+
+    // Calculate total extension count
+    *extensionCount = sdlExtensionCount + (context->enableValidationLayers ? 1 : 0);
+
+    // Allocate memory for the final extensions array
+    const char** finalExtensions = malloc(sizeof(char*) * (*extensionCount));
+    if (!finalExtensions)
+    {
+        // Handle allocation failure if needed
+        *extensionCount = 0; // Indicate failure
+        return NULL;
+    }
+
+    // Copy SDL extensions into the final array
+    for (Uint32 i = 0; i < sdlExtensionCount; i++)
+    {
+        finalExtensions[i] = sdlExtensions[i];
+    }
+
+    // Add the debug utils extension name if validation layers are enabled
+    if (context->enableValidationLayers)
+    {
+        finalExtensions[sdlExtensionCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    }
+
+    return finalExtensions; // Caller is responsible for freeing this memory
 }
 
-void
-populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo)
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL
+vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+                    VkDebugUtilsMessageTypeFlagsEXT             messageType,
+                    const VkDebugUtilsMessengerCallbackDataEXT  *pCallbackData,
+                    void                                        *pUserData)
 {
-    createInfo->sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo->messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo->messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-                                | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    createInfo->pfnUserCallback = debugCallback;
-    createInfo->pUserData       = NULL;
+    // Customize the message severity handling as needed
+    if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        fprintf(stderr, "validation layer: %s\n", pCallbackData->pMessage);
+    }
+
+    return VK_FALSE; // VK_FALSE indicates that the application should not be aborted
 }
 
 VkResult
-CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
+createDebugUtilsMessengerEXT(VkInstance                                 instance,
+                             const VkDebugUtilsMessengerCreateInfoEXT   *pCreateInfo,
+                             const VkAllocationCallbacks                *pAllocator,
+                             VkDebugUtilsMessengerEXT                   *pDebugMessenger)
 {
-    PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)
-        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != NULL)
     {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
@@ -301,59 +233,46 @@ CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCre
 }
 
 void
-DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator)
+destroyDebugUtilsMessengerEXT(VkInstance                    instance,
+                              VkDebugUtilsMessengerEXT      debugMessenger,
+                              const VkAllocationCallbacks*  pAllocator)
 {
-    PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)
-        vkGetInstanceProcAddr(instance,"vkDestroyDebugUtilsMessengerEXT");
+    PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != NULL)
     {
-        func(instance, debugMessenger, pAllocator);
+        func(instance, debugMessenger, NULL);
     }
+}
+
+VkDebugUtilsMessengerCreateInfoEXT
+createDebugMessengerCreateInfo()
+{
+    VkDebugUtilsMessengerCreateInfoEXT createInfo = {
+        .sType              = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .messageSeverity    = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        .messageType        = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+        .pfnUserCallback    = vulkanDebugCallback
+    };
+    return createInfo;
 }
 
 void
-createDebugMessenger()
+createVulkanDebugMessenger(VulkanContext *context)
 {
+    VkDebugUtilsMessengerCreateInfoEXT createInfo = createDebugMessengerCreateInfo();
 
-    VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
-    populateDebugMessengerCreateInfo(&createInfo);
+    VkResult result = createDebugUtilsMessengerEXT(context->instance, &createInfo, NULL, &context->debugMessenger);
 
-
-    if (CreateDebugUtilsMessengerEXT(g_vulkanInstance,
-                                     &createInfo,
-                                     NULL,
-                                     &g_vulkanDebugMessenger)
-                                     != VK_SUCCESS)
+    if (result != VK_SUCCESS)
     {
-        printf("Failed to set up debug messenger!\n");
+        printf("Failed to create Vulkan debug messenger\n");
         exit(1);
     }
-
-    printf("Debug messenger created successfully!\n");
-
-}
-
-const char**
-getRequiredExtensions(Uint32 *extensionCount)
-{
-    char const* const* extensionNames = SDL_Vulkan_GetInstanceExtensions(
-        extensionCount);
-    if (g_enableValidationLayers)
-    {
-        Uint32 count = *extensionCount;
-        *extensionCount += 1;
-        const char** extensions = malloc(sizeof(char*) * *extensionCount);
-        for (Uint32 i = 0; i < count; i++)
-        {
-            extensions[i] = extensionNames[i];
-        }
-        extensions[count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-        return extensions;
-    }
-    else
-    {
-        return extensionNames;
-    }
+    printf("Vulkan debug messenger created.\n");
 }
 
 bool
@@ -365,22 +284,19 @@ checkValidationLayerSupport()
     VkLayerProperties* availableLayers = malloc(sizeof(VkLayerProperties) * layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
 
-    for (uint32_t i = 0; i < sizeof(g_validationLayers) / sizeof(g_validationLayers[0]); i++)
+    bool layerFound = false;
+    for (uint32_t j = 0; j < layerCount; j++)
     {
-        bool layerFound = false;
-        for (uint32_t j = 0; j < layerCount; j++)
+        if (strcmp("VK_LAYER_KHRONOS_validation", availableLayers[j].layerName) == 0)
         {
-            if (strcmp(g_validationLayers[i], availableLayers[j].layerName) == 0)
-            {
-                layerFound = true;
-                break;
-            }
+            layerFound = true;
+            break;
         }
-        if (!layerFound)
-        {
-            free(availableLayers);
-            return false;
-        }
+    }
+    if (!layerFound)
+    {
+        free(availableLayers);
+        return false;
     }
 
     free(availableLayers);
@@ -388,14 +304,14 @@ checkValidationLayerSupport()
 }
 
 void
-createInstance()
+createVulkanInstance(VulkanContext *context)
 {
-    if (g_enableValidationLayers && !checkValidationLayerSupport())
-    {
-        printf("Validation layers requested, but not available!\n");
+    if (context->enableValidationLayers && !checkValidationLayerSupport()) {
+        fprintf(stderr, "Validation layers requested, but not available.\n");
         exit(1);
     }
 
+    // Define application information
     VkApplicationInfo appInfo = {};
     appInfo.sType               = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName    = "Sky Lion";
@@ -404,82 +320,72 @@ createInstance()
     appInfo.engineVersion       = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion          = VK_API_VERSION_1_3;
 
-    Uint32 extensionCount = 0;
-    const char** extensionNames = getRequiredExtensions(&extensionCount);
-
+    // Define instance create info
     VkInstanceCreateInfo createInfo = {};
-    createInfo.sType                    = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pApplicationInfo         = &appInfo;
-    createInfo.enabledExtensionCount    = extensionCount;
-    createInfo.ppEnabledExtensionNames  = extensionNames;
+    createInfo.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo = &appInfo;
 
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
-    if (g_enableValidationLayers)
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = createDebugMessengerCreateInfo();
+    if (context->enableValidationLayers)
     {
-        createInfo.enabledLayerCount = sizeof(g_validationLayers) / sizeof(g_validationLayers[0]);
-        createInfo.ppEnabledLayerNames = g_validationLayers;
-
-        populateDebugMessengerCreateInfo(&debugCreateInfo);
-        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
+        createInfo.enabledLayerCount    = context->validationLayerCount;
+        createInfo.ppEnabledLayerNames  = &context->validationLayers;
+        createInfo.pNext                = &debugCreateInfo;
     }
     else
     {
-        createInfo.enabledLayerCount = 0;
-        createInfo.pNext = NULL;
+        createInfo.enabledLayerCount    = 0;
+        createInfo.pNext                = NULL;
     }
 
-    VkResult result = vkCreateInstance(&createInfo, NULL,&g_vulkanInstance);
+    // Specify any required extensions, e.g., for window system integration
+    Uint32 extensionCount = 0;
+    const char** extensions = getVulkanExtensions(context, &extensionCount);
+    createInfo.enabledExtensionCount   = extensionCount;
+    createInfo.ppEnabledExtensionNames = extensions;
+
+    // Create the Vulkan instance
+    VkResult result = vkCreateInstance(&createInfo, NULL, &context->instance);
+
+    if (extensions != NULL) { free(extensions); }
+
     if (result != VK_SUCCESS)
     {
-        printf("Failed to create Vulkan instance!\n");
+        printf("Failed to create Vulkan instance\n");
         exit(1);
     }
-    else
-    {
-        printf("Vulkan instance created successfully!\n");
-    }
 
-    if (g_enableValidationLayers)
-    {
-        free(extensionNames);
-    }
-
+    printf("Vulkan instance created.\n");
 }
 
-/************************************************************
- *
- *  Create the renderer
- *
- ************************************************************/
 void
 createRenderer()
 {
-    createInstance();
-    if (g_enableValidationLayers)
-    {
-        printf("Creating Vulkan instance with validation layers...\n");
-        createDebugMessenger();
-    }
-    createSurface();
-    selectPhysicalDevice();
-    createLogicalDevice();
+#ifndef NDEBUG
+    g_vulkanContext.enableValidationLayers = true;
+    g_vulkanContext.validationLayerCount = 1;
+    g_vulkanContext.validationLayers = "VK_LAYER_KHRONOS_validation";
+#endif
 
-    createMemoryAllocator();
+    createVulkanInstance(&g_vulkanContext);
+    if (g_vulkanContext.enableValidationLayers){ createVulkanDebugMessenger(&g_vulkanContext); }
+    createSurface(&g_vulkanContext);
+    createPhysicalDevice(&g_vulkanContext);
+    createVulkanDevice(&g_vulkanContext);
+
 }
 
-/************************************************************
- *
- *  Clean up
- *
- ************************************************************/
 void
 destroyRenderer()
 {
-    vkDestroySurfaceKHR(g_vulkanInstance, g_vulkanSurface, NULL);
-    vkDestroyDevice(g_vulkanDevice, NULL);
-    if (g_enableValidationLayers)
+    vkDestroyDevice(g_vulkanContext.device, NULL);
+    vkDestroySurfaceKHR(g_vulkanContext.instance, g_vulkanContext.surface, NULL);
+    if (g_vulkanContext.enableValidationLayers) { destroyDebugUtilsMessengerEXT(g_vulkanContext.instance, g_vulkanContext.debugMessenger, NULL); }
+    if (g_vulkanContext.extensions)
     {
-        DestroyDebugUtilsMessengerEXT(g_vulkanInstance,g_vulkanDebugMessenger,NULL);
+        free(g_vulkanContext.extensions);
+        g_vulkanContext.extensions = NULL;
     }
-    vkDestroyInstance(g_vulkanInstance, NULL);
+    vkDestroyInstance(g_vulkanContext.instance, NULL);
+    printf("Vulkan instance destroyed.\n");
 }
