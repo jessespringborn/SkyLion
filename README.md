@@ -9,8 +9,9 @@
 - [ ] Create Renderer
   - [x] Create Vulkan Instance
   - [x] Create Debug Messenger
-  - [ ] Create Physical Device
-  - [ ] Create Surface
+  - [x] Create Physical Device
+  - [x] Create Surface
+  - [x] Create Logical Device
   - [ ] Create Swap Chain
   - [ ] Create Graphics Pipeline
 - [ ] Load GLTF Model
