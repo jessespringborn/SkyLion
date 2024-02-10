@@ -16,8 +16,13 @@
 #ifndef SKYLION_SRC_SKYLION_H
 #define SKYLION_SRC_SKYLION_H
 
+#include <cglm/cglm.h>
+
 /** The Window */
 #include "Window.h"
+#include "Model.h"
 #include "Renderer.h"
+
+
 
 #endif //SKYLION_SRC_SKYLION_H

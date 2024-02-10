@@ -56,6 +56,7 @@ dkms.conf
 build/
 cmake-build-debug/
 cmake-build-release/
+third_party/vulkan/
 
 # All build folders
 [Bb][Uu][Ii][Ll][Dd]/

@@ -7,10 +7,18 @@
 
 #include <SDL3/SDL.h>
 
-extern SDL_Window* SLWindow;
+typedef struct SLWindow
+{
+    SDL_Window* window;
+    const char* title;
+    int width;
+    int height;
+    Uint32 flags;
+} SLWindow;
 
+SLWindow* getWindow();
 
-void createWindow(const char* title, int width, int height);
+void createWindow();
 
 void destroyWindow();
 

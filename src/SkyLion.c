@@ -42,7 +42,7 @@ run()
 {
     printf("Starting Sky Lion Engine...\n");
 
-    createWindow("Sky Lion", 800, 600);
+    createWindow();
     createRenderer();
 
     coreLoop();
