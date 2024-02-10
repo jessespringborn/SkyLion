@@ -54,7 +54,6 @@ VkFramebuffer *g_vulkanFramebuffers;
 VkCommandBuffer *g_vulkanCommandBuffers;
 VkBuffer *g_vulkanUniformBuffers;
 VkDeviceMemory *g_vulkanUniformBuffersMemory;
-// sync objects
 VkSemaphore *g_vulkanImageAvailableSemaphores;
 VkSemaphore *g_vulkanRenderFinishedSemaphores;
 uint32_t g_vulkanMaxFramesInFlight = 2;
@@ -447,21 +446,19 @@ createVulkanStatics()
     VkPhysicalDeviceFeatures deviceFeatures = {0};
     deviceFeatures.samplerAnisotropy = VK_TRUE;
 
-    // Replace physicalDevice->getDeviceExtensions() and instance->getValidationLayers()
-    // with your actual arrays of extensions and validation layers
     const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     uint32_t deviceExtensionCount = 1;
 
     const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
     uint32_t validationLayerCount = 1;
 
-    VkDeviceCreateInfo deviceCreateInfo = {0};
-    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    deviceCreateInfo.queueCreateInfoCount = uniqueQueueFamilyCount;
-    deviceCreateInfo.pQueueCreateInfos = queueCreateInfos;
-    deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
-    deviceCreateInfo.enabledExtensionCount = deviceExtensionCount;
-    deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions;
+    VkDeviceCreateInfo deviceCreateInfo         = {0};
+    deviceCreateInfo.sType                      = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceCreateInfo.queueCreateInfoCount       = uniqueQueueFamilyCount;
+    deviceCreateInfo.pQueueCreateInfos          = queueCreateInfos;
+    deviceCreateInfo.pEnabledFeatures           = &deviceFeatures;
+    deviceCreateInfo.enabledExtensionCount      = deviceExtensionCount;
+    deviceCreateInfo.ppEnabledExtensionNames    = deviceExtensions;
 
     if (isValidationEnabled)
     {
@@ -493,7 +490,7 @@ createVulkanStatics()
     poolInfo.sType				= VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.queueFamilyIndex	= g_vulkanGraphicsFamily;
     poolInfo.flags				= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
-        | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+                                | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     if (vkCreateCommandPool(g_vulkanDevice, &poolInfo, NULL, &g_vulkanCommandPool) != VK_SUCCESS)
     {
@@ -787,28 +784,27 @@ createVulkanDynamics()
     subpass.pColorAttachments		= &colorAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
-    VkSubpassDependency dependency = {};
-    dependency.srcSubpass			= VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass			= 0;
-    dependency.srcStageMask			= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-        | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.srcAccessMask		= 0;
-    dependency.dstStageMask			= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-        | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask		= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-        | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    VkSubpassDependency dependency = {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .srcAccessMask = 0,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+    };
 
     VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment };
     uint32_t attachmentCount = 2;
 
-    VkRenderPassCreateInfo renderPassInfo = {};
-    renderPassInfo.sType			= VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount	= attachmentCount;
-    renderPassInfo.pAttachments		= attachments;
-    renderPassInfo.subpassCount		= 1;
-    renderPassInfo.pSubpasses		= &subpass;
-    renderPassInfo.dependencyCount	= 1;
-    renderPassInfo.pDependencies	= &dependency;
+    VkRenderPassCreateInfo renderPassInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = attachmentCount,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = 1,
+        .pDependencies = &dependency
+    };
 
     if (vkCreateRenderPass(g_vulkanDevice, &renderPassInfo, NULL, &g_vulkanRenderPass) != VK_SUCCESS)
     {
@@ -847,10 +843,11 @@ createVulkanDynamics()
         fread(buffer, 1, fileSize, file);
         fclose(file);
 
-        VkShaderModuleCreateInfo shaderCreateInfo = {};
-        shaderCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        shaderCreateInfo.codeSize = fileSize;
-        shaderCreateInfo.pCode = buffer;
+        VkShaderModuleCreateInfo shaderCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = fileSize,
+            .pCode = buffer
+        };
 
         VkResult shaderCreateResult = vkCreateShaderModule(g_vulkanDevice, &shaderCreateInfo, NULL, &shaderModules[shaderIndex]);
         if (shaderCreateResult != VK_SUCCESS) {  // Corrected condition
@@ -863,26 +860,29 @@ createVulkanDynamics()
     }
 
     // vertex shader info
-    VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
-    vertShaderStageInfo.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertShaderStageInfo.stage	= VK_SHADER_STAGE_VERTEX_BIT;
-    vertShaderStageInfo.module	= shaderModules[0]; // vertex shader
-    vertShaderStageInfo.pName	= "main";
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = shaderModules[0], // vertex shader
+        .pName = "main"
+    };
 
     // fragment shader info
-    VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
-    fragShaderStageInfo.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragShaderStageInfo.stage	= VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragShaderStageInfo.module	= shaderModules[1]; // fragment shader
-    fragShaderStageInfo.pName	= "main";
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .module = shaderModules[1], // fragment shader
+        .pName = "main"
+    };
 
     // info for all shader stages
     VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
-    VkVertexInputBindingDescription bindingDescription = {};
-    bindingDescription.binding		= 0;
-    bindingDescription.stride		= sizeof(Vertex);
-    bindingDescription.inputRate	= VK_VERTEX_INPUT_RATE_VERTEX;
+    VkVertexInputBindingDescription bindingDescription = {
+        .binding = 0,
+        .stride = sizeof(Vertex),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+    };
 
     VkVertexInputAttributeDescription attributeDescriptions[6];
     attributeDescriptions[0].binding = 0;

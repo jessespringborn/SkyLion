@@ -6,14 +6,14 @@
 - [x] Setup GitHub Repository
 - [x] Setup third party libraries
 - [x] Create Window
-- [ ] Create Renderer
+- [X] Create Renderer
   - [x] Create Vulkan Instance
   - [x] Create Debug Messenger
   - [x] Create Physical Device
   - [x] Create Surface
   - [x] Create Logical Device
-  - [ ] Create Swap Chain
-  - [ ] Create Graphics Pipeline
+  - [X] Create Swap Chain
+  - [X] Create Graphics Pipeline
 - [ ] Load GLTF Model
   - [ ] Load Model
   - [ ] Load Textures
