@@ -4,58 +4,35 @@
 
 #include "SkyLion.h"
 
-#include <stdio.h>
-#include <stdbool.h>
 
-#include "Window.h"
-
-void coreLoop()
+void
+core_loop()
 {
-    bool running = true;
-    while (running)
+    bool is_running = true;
+    while (is_running)
     {
-        // Handle events
         SDL_Event event;
-        while (SDL_PollEvent(&event))
+        if (SDL_PollEvent(&event))
         {
-            if (event.type == SDL_EVENT_QUIT)
+            switch (event.type)
             {
-                running = false;
+                case SDL_EVENT_QUIT:
+                    is_running = false;
+                    break;
             }
         }
     }
 }
 
-void
-shutDown()
-{
-    printf("Shutting down Sky Lion Engine...\n");
-
-    destroyRenderer();
-    destroyWindow();
-
-    printf("Sky Lion Engine shut down.\n");
-}
-
-int
-run()
-{
-    printf("Starting Sky Lion Engine...\n");
-
-    createWindow();
-    createRenderer();
-
-    coreLoop();
-
-    shutDown();
-
-    return 0;
-}
-
 int
 main()
 {
-    run();
+    get_window();
+    create_renderer();
 
-    return 0;
+    core_loop();
+
+    destroy_renderer();
+
+    return SKY_SUCCESS;
 }
